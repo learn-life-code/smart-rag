@@ -88,6 +88,17 @@ def main():
     check("code: symbol 'deserialize' defined_in",
           any(x.entity == "deserialize" and x.attribute == "defined_in" for x in facts))
 
+    # ── call graph (Python AST): A calls B edges + noise filtered ────────────
+    f = _w(tmp, "cg.py",
+           "def helper(x):\n    return x + 1\n\n"
+           "def main():\n    print('hi')\n    return helper(5)\n")
+    facts = list(adapter_for(f).extract(f))
+    edges = [x for x in facts if x.attribute == "calls" and x.kind == "relation"]
+    check("callgraph: 'main calls helper' edge present",
+          any(x.entity == "main" and x.value == "helper" for x in edges))
+    check("callgraph: builtin 'print' filtered as noise",
+          not any(x.value == "print" for x in edges))
+
     # ── empty / garbage honesty ──────────────────────────────────────────────
     f = _w(tmp, "blank.ini", "\n; nothing\n")
     check("empty ini → 0 facts", len(list(adapter_for(f).extract(f))) == 0)

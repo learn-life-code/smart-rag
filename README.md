@@ -212,10 +212,16 @@ because the entity-relation model fits structured standards naturally:
 | Domain | Formats / standards |
 |---|---|
 | **General** | Excel/CSV/JSON, **Parquet**, **YAML/TOML**, INI/cfg/properties, Markdown/PDF/DOCX/HTML, **PPTX/Visio** |
-| **Software** | source code (multi-language), **OpenAPI/Swagger** specs, codegraph symbol DBs |
+| **Software** | source code (multi-language) **+ call graph** ("what calls X"), **OpenAPI/Swagger** specs, codegraph symbol DBs |
 | **Automotive** | **AUTOSAR ARXML**, **DBC** (CAN), **ODX** (ISO 22901 diagnostics/DTCs), **A2L** (ASAM MCD-2 MC calibration) |
 | **Semiconductor** | **IP-XACT** (IEEE 1685), **SPICE netlists** (component→net graph) |
 | **Logs** | DLT, logcat, slog, generic text |
+
+**Call graph** ("what calls X / what does Y call"): the code adapter extracts real
+call edges from source — Python via the stdlib AST (exact, zero-dep, always on),
+other languages via an optional tree-sitter backend (`pip install
+tree-sitter-language-pack`; without it, non-Python files still get symbols + prose).
+Edges are queryable: `answer("what does hybrid_retrieve call")`.
 
 Adding a format = one adapter (`smart_rag/adapters/`), 30-100 lines; the core never
 changes. Adapters declare the entity types they emit (`emits`) and the `standard`

@@ -44,7 +44,8 @@ class CodeAdapter(Adapter):
 
     def extract(self, path: str) -> Iterable[Fact]:
         src = _safe_relpath(path)
-        lang = _LANG.get(os.path.splitext(path)[1].lower(), "code")
+        ext = os.path.splitext(path)[1].lower()
+        lang = _LANG.get(ext, "code")
         try:
             text = open(path, encoding="utf-8", errors="replace").read()
         except Exception:
@@ -58,6 +59,13 @@ class CodeAdapter(Adapter):
                 yield Fact(entity=name, attribute="defined_in", value=f"{src}:{line}",
                            source=src, span=m.group(0).strip()[:120])
                 yield Fact(entity=name, attribute="kind", value=f"{lang} symbol", source=src)
+        # CALL GRAPH (relation edges). Python via accurate stdlib AST; other
+        # languages via the optional tree-sitter backend if installed (graceful).
+        try:
+            from smart_rag.adapters import callgraph as _cg
+            yield from _cg.call_edges(text, src, ext)
+        except Exception:  # noqa: BLE001
+            pass
 
     def prose_chunks(self, path: str) -> Iterable[dict]:
         src = _safe_relpath(path)

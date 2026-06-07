@@ -33,6 +33,7 @@ semantic = [
 docs = ["pymupdf>=1.24.0", "python-docx>=1.1.0"]
 formats = ["pyyaml>=6.0", "pyarrow>=14.0"]   # YAML/OpenAPI, Parquet
 agent = ["mcp>=1.0.0", "paramiko>=3.0"]       # MCP server, SSH collector
+callgraph = ["tree-sitter-language-pack>=0.1"]  # call graph for non-Python langs
 bench = ["tiktoken>=0.5.0"]
 all = [
     "sentence-transformers>=3.0.0,<6.0.0",
