@@ -1,0 +1,18 @@
+# Distill — self-contained dependencies
+# Core (always needed)
+numpy>=1.24.0
+openpyxl>=3.1.0
+# Intent + semantic prose search (GPU-aware; falls back to keyword if absent).
+# IMPORTANT pins: recent sentence-transformers needs a COMPATIBLE transformers +
+# tokenizers that ship PREBUILT wheels for Python 3.13. Without these bounds, pip
+# pulled transformers 5.x (broke the API: "Could not import PreTrainedModel") or an
+# old tokenizers with no 3.13 wheel (tried to compile Rust → needs link.exe). These
+# versions all have cp313 wheels — NO compiler/Rust needed.
+sentence-transformers>=3.0.0,<6.0.0
+transformers>=4.41.0,<4.57.0
+tokenizers>=0.20.0          # has prebuilt cp313 wheels (0.19 does NOT)
+# Document adapters
+pymupdf>=1.24.0        # PDF (datasheets, reports)
+python-docx>=1.1.0     # Word (ODX, specs)
+# Optional: tiktoken for the benchmark token counts
+tiktoken>=0.5.0
