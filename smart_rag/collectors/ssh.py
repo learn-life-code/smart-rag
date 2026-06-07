@@ -109,11 +109,49 @@ def collect_ssh(target: str, *, key: Optional[str] = None,
 
 
 def collect_ssh_chunks(target: str, **kw) -> List[dict]:
-    """collect_ssh, but as ingest_chunks-ready dicts (one per command block)."""
+    """collect_ssh, but as ingest_chunks-ready dicts (one per command block). Each
+    chunk records the COMMAND that produced it + a collected-at timestamp, so an
+    answer can later say 'verify live with: <cmd>' and the index knows its age."""
+    import time
     blob = collect_ssh(target, **kw)
+    collected_at = time.strftime("%Y-%m-%d %H:%M:%S")
     chunks = []
     for block in blob.split("\n## "):
         block = block if block.startswith("#") else "## " + block
-        label = block.split("\n", 1)[0].lstrip("# ").strip()
-        chunks.append({"text": block, "source": f"ssh:{target}", "title": label})
+        lines = block.split("\n")
+        label = lines[0].lstrip("# ").strip()
+        # the '$ <cmd>' line carries the verification command
+        cmd = next((ln[2:].strip() for ln in lines if ln.startswith("$ ")), "")
+        chunks.append({"text": block, "source": f"ssh:{target}", "title": label,
+                       "version": f"@{collected_at}",
+                       # stash the command in the title tail so verify() can recover it
+                       "command": cmd})
     return chunks
+
+
+def run_one(target: str, command: str, *, key: Optional[str] = None,
+            password: Optional[str] = None, port: int = 22, timeout: int = 20) -> str:
+    """Run ONE read-only command live and return its output — for verifying a
+    snapshot answer against current truth. Refuses non-read-only commands."""
+    if not _is_read_only(command):
+        return f"REFUSED (not read-only): {command}"
+    try:
+        import paramiko
+    except Exception as e:  # noqa: BLE001
+        raise RuntimeError("needs paramiko: pip install paramiko") from e
+    user, _, host = target.partition("@")
+    if not host:
+        user, host = (os.environ.get("USER", "root"), user)
+    client = paramiko.SSHClient()
+    client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    kw = {"hostname": host, "port": port, "username": user, "timeout": timeout}
+    if key:
+        kw["key_filename"] = os.path.expanduser(key)
+    if password:
+        kw["password"] = password
+    client.connect(**kw)
+    try:
+        _in, out, _err = client.exec_command(command, timeout=timeout)
+        return out.read().decode("utf-8", "replace").strip()[:6000]
+    finally:
+        client.close()

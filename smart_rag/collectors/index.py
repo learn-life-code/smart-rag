@@ -146,6 +146,59 @@ class IndexManager:
     def ask_text(self, name: str, query: str) -> str:
         return self.answer(name, query).to_text()
 
+    # ── live verification (snapshot → current truth) ─────────────────────────
+    def verify(self, name: str, query: str, *, key: Optional[str] = None,
+               password: Optional[str] = None) -> dict:
+        """Answer from the index (fast snapshot), THEN re-run the source command
+        LIVE on the SSH target to confirm it's still true. Returns
+        {answer, snapshot, live, command, changed}. Only for ssh-collected indexes.
+
+        This keeps the boundary honest: the index gives a fast cited POINTER; verify
+        checks it against the device NOW (read-only). If the live output differs from
+        the snapshot, `changed` is True — the fast answer is stale, trust the live one.
+        """
+        cat = self._catalog().get(name, {})
+        source = cat.get("source", "")
+        if not source.startswith("ssh:"):
+            return {"error": f"'{name}' is not an SSH index (source={source}); "
+                    "live verification only applies to SSH-collected indexes."}
+        target = source[4:]
+        res = self.answer(name, query)
+        # the command is embedded in the matched evidence text as a '$ <cmd>' line
+        sr = self._get(name)
+        cmd = ""
+        snap = ""
+        import re as _re
+        if res.evidence:
+            snap = res.evidence[0].text
+            m = _re.search(r'^\$ (.+)$', snap, _re.M)
+            if not m:
+                # fall back: find the full prose chunk this evidence came from
+                top = res.evidence[0].source
+                for p in (sr.store.prose if sr else []):
+                    if top in p.get("title", "") or top in p.get("text", "")[:100]:
+                        snap = p.get("text", "")
+                        m = _re.search(r'^\$ (.+)$', snap, _re.M)
+                        break
+            if m:
+                cmd = m.group(1).strip()
+        if not cmd:
+            return {"answer": res.to_text(), "command": "",
+                    "note": "No source command found to re-run; verify manually."}
+        from smart_rag.collectors.ssh import run_one
+        try:
+            live = run_one(target, cmd, key=key, password=password)
+        except Exception as e:  # noqa: BLE001
+            return {"answer": res.to_text(), "command": cmd,
+                    "error": f"live re-run failed: {e}"}
+        # crude change detection: compare the meaningful body lines
+        def _body(t):
+            return "\n".join(ln for ln in t.splitlines()
+                             if ln and not ln.startswith(("#", "$ ", "##")))
+        changed = _body(snap).strip() != live.strip()
+        return {"answer": res.to_text(), "command": cmd, "snapshot": _body(snap)[:1500],
+                "live": live[:1500], "changed": changed}
+
     # ── admin ────────────────────────────────────────────────────────────────
     def list(self) -> dict:
         return self._catalog()

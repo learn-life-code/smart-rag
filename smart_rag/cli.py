@@ -55,9 +55,12 @@ def main():
     p.add_argument("name"); p.add_argument("question")
     p = sub.add_parser("indexes", help="list named indexes")
     p = sub.add_parser("drop", help="remove a named index"); p.add_argument("name")
+    p = sub.add_parser("verify", help="answer from index THEN re-check live over SSH")
+    p.add_argument("name"); p.add_argument("question")
+    p.add_argument("--key"); p.add_argument("--password")
     args = ap.parse_args()
 
-    if args.cmd in ("index", "query", "indexes", "drop"):
+    if args.cmd in ("index", "query", "indexes", "drop", "verify"):
         from smart_rag.collectors import IndexManager
         mgr = IndexManager()
         if args.cmd == "index":
@@ -73,6 +76,20 @@ def main():
                       f"← {m.get('source')}")
         elif args.cmd == "drop":
             print("removed" if mgr.remove(args.name) else "no such index")
+        elif args.cmd == "verify":
+            v = mgr.verify(args.name, args.question, key=args.key, password=args.password)
+            if v.get("error"):
+                print(v["error"]); return
+            print("── FAST ANSWER (from index snapshot) ──")
+            print(v.get("answer", ""))
+            if v.get("command"):
+                print(f"\n── LIVE VERIFY ── re-ran: {v['command']}")
+                if "live" in v:
+                    print(("⚠ CHANGED since the snapshot — trust the LIVE result:"
+                           if v.get("changed") else "✓ matches the snapshot (still current):"))
+                    print("LIVE NOW:\n" + v["live"])
+                else:
+                    print(v.get("error") or v.get("note", ""))
         return
 
     if args.cmd == "ingest":

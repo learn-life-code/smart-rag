@@ -72,6 +72,26 @@ def main():
     check("index: unknown query abstains", mgr2.answer("proj", "price of bitcoin").status
           in ("NOT_FOUND", "INSUFFICIENT_EVIDENCE"))
 
+    # ── live-verify: extracts source command + detects snapshot-vs-now change ─
+    import smart_rag.collectors.ssh as _ssh
+    from smart_rag import SmartRAG
+    mgr3 = IndexManager(home=os.path.join(tmp, "h2"))
+    chunks = [{"text": "## services\n$ systemctl list-units --state=running\n"
+               "audio.service running\ndisplay.service running",
+               "source": "ssh:root@10.0.0.5", "title": "services"}]
+    sr3 = SmartRAG(mgr3._db_path("vcu")); sr3.ingest_chunks(chunks, verbose=False)
+    mgr3._open["vcu"] = sr3
+    cat = mgr3._catalog(); cat["vcu"] = {"source": "ssh:root@10.0.0.5",
+                                         "db": mgr3._db_path("vcu")}
+    mgr3._save_catalog(cat)
+    _orig = _ssh.run_one
+    _ssh.run_one = lambda t, c, **k: "audio.service stopped\ndisplay.service running"
+    v = mgr3.verify("vcu", "what services are running")
+    _ssh.run_one = _orig
+    check("verify: extracts the source command to re-run",
+          "systemctl" in (v.get("command") or ""))
+    check("verify: detects the snapshot is stale (changed=True)", v.get("changed") is True)
+
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n=== collectors: {_PASS}/{_PASS+_FAIL} passed ===")
     sys.exit(0 if _FAIL == 0 else 1)

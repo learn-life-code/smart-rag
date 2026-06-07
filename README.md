@@ -181,6 +181,29 @@ Tools: `smartrag_index(name, path)`, `smartrag_answer(name, query)`,
 Indexes are named + persistent (`~/.smartrag/`), so building is one-time and
 re-opening is instant.
 
+### Snapshot vs. live — and verifying against the real machine
+
+An index is a **snapshot** taken at collection time. Smart RAG gives you a fast,
+cited *pointer* — not a guarantee that it's still true on the device right now. That
+boundary is deliberate: "where/what is X" is retrieval; "is X true **now**" is a live
+check. Conflating them would let a 2-hour-old answer masquerade as current truth.
+
+For SSH-collected indexes, `verify` closes the loop honestly: it gives the fast
+answer **then re-runs the source command live (read-only)** and tells you if reality
+has changed since the snapshot.
+
+```bash
+python -m smart_rag.cli verify vcu "what services are running" --key ~/.ssh/id_rsa
+# ── FAST ANSWER (from index snapshot) ──  audio.service running ...
+# ── LIVE VERIFY ── re-ran: systemctl list-units --state=running
+# ⚠ CHANGED since the snapshot — trust the LIVE result:  audio.service stopped ...
+```
+
+**Note on running Smart RAG itself:** it runs on *your* machine (it needs Python +
+optional embeddings), and reaches *into* a module read-only via the SSH collector —
+it does **not** install or run on the embedded device. WinSCP/SCP workflows are
+covered too: pull files to a folder, then point the fs collector at it.
+
 ## Formats & standards
 
 Smart RAG reads common formats **and** real engineering interchange standards —
