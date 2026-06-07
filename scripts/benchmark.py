@@ -123,6 +123,61 @@ def r_vector(chunks, q, mat, embed_one, k=8, floor=0.25):
     return [chunks[i] for i in order if sims[i] >= floor]
 
 
+def _tfidf_index(chunks):
+    """Classic TF-IDF vector space (sklearn) — a different IR baseline than BM25."""
+    try:
+        from sklearn.feature_extraction.text import TfidfVectorizer
+        vec = TfidfVectorizer()
+        mat = vec.fit_transform(chunks)
+        return vec, mat
+    except Exception:
+        return None
+
+
+def r_tfidf(chunks, q, idx, k=8, floor=0.05):
+    if idx is None:
+        return []
+    vec, mat = idx
+    import numpy as np
+    qv = vec.transform([q])
+    sims = (mat @ qv.T).toarray().ravel()
+    order = np.argsort(-sims)[:k]
+    return [chunks[i] for i in order if sims[i] >= floor]
+
+
+def r_hybrid(chunks, q, bm25_idx, vec_mat, embed_one, k=8):
+    """Hybrid BM25 + vector fused with Reciprocal Rank Fusion — what modern
+    production RAG actually does. The STRONGEST flat-RAG competitor."""
+    import numpy as np
+    # BM25 ranking
+    docs, idf, avgdl = bm25_idx
+    terms = _tok(q)
+    bm = []
+    for i, d in enumerate(docs):
+        from collections import Counter as _C
+        tf = _C(d); s = 0.0
+        for t in terms:
+            if t in tf:
+                s += idf.get(t, 0) * (tf[t] * 2.5) / (tf[t] + 1.5 * (0.25 + 0.75 * len(d) / avgdl))
+        bm.append((s, i))
+    bm_rank = {i: r for r, (s, i) in enumerate(sorted(bm, key=lambda x: -x[0])) if s > 0}
+    # vector ranking
+    vec_rank = {}
+    if vec_mat is not None:
+        sims = vec_mat @ embed_one(q)
+        for r, i in enumerate(np.argsort(-sims)):
+            if sims[i] >= 0.2:
+                vec_rank[int(i)] = r
+    # RRF fuse
+    fused = {}
+    for i, r in bm_rank.items():
+        fused[i] = fused.get(i, 0) + 1.0 / (60 + r)
+    for i, r in vec_rank.items():
+        fused[i] = fused.get(i, 0) + 1.0 / (60 + r)
+    top = sorted(fused, key=lambda i: -fused[i])[:k]
+    return [chunks[i] for i in top]
+
+
 # ── benchmark ─────────────────────────────────────────────────────────────────
 def main():
     ap = argparse.ArgumentParser()
@@ -140,6 +195,7 @@ def main():
 
     sr = SmartRAG(); sr.ingest(args.path, verbose=False)
     bm25 = _bm25_index(chunks)
+    tfidf = _tfidf_index(chunks)
 
     # optional vector baseline (same embedder Smart RAG uses)
     vec_mat = embed_one = None
@@ -151,7 +207,8 @@ def main():
     except Exception:
         pass
 
-    methods = ["RAW DUMP", "FLAT KEYWORD", "BM25", "VECTOR RAG", "SMART RAG"]
+    methods = ["RAW DUMP", "FLAT KEYWORD", "TF-IDF", "BM25", "VECTOR RAG",
+               "HYBRID (BM25+vec RRF)", "SMART RAG"]
     res = {m: {"atoks": [], "correct": 0, "abstain": 0, "cite": 0, "ans_n": 0}
            for m in methods}
 
@@ -167,6 +224,9 @@ def main():
         # FLAT
         fc = r_flat(chunks, q); ft = "\n".join(fc)
         record("FLAT KEYWORD", toks(ft), exp.lower() in ft.lower(), 0)
+        # TF-IDF
+        tc = r_tfidf(chunks, q, tfidf); tt = "\n".join(tc)
+        record("TF-IDF", toks(tt), exp.lower() in tt.lower(), 0)
         # BM25
         bc = r_bm25(chunks, q, bm25); bt = "\n".join(bc)
         record("BM25", toks(bt), exp.lower() in bt.lower(), 0)
@@ -174,6 +234,9 @@ def main():
         if vec_mat is not None:
             vc = r_vector(chunks, q, vec_mat, embed_one); vt = "\n".join(vc)
             record("VECTOR RAG", toks(vt), exp.lower() in vt.lower(), 0)
+        # HYBRID (BM25 + vector, RRF)
+        hc = r_hybrid(chunks, q, bm25, vec_mat, embed_one); ht = "\n".join(hc)
+        record("HYBRID (BM25+vec RRF)", toks(ht), exp.lower() in ht.lower(), 0)
         # SMART RAG
         a = sr.answer(q); at = a.to_text()
         ok = exp.lower() in at.lower() and a.status in ("ANSWERED", "PARTIAL", "CONFLICT")
@@ -186,9 +249,11 @@ def main():
         # keyword/vector "abstain" only if they return nothing; raw never abstains
         res["RAW DUMP"]["abstain"] += 0
         res["FLAT KEYWORD"]["abstain"] += (0 if r_flat(chunks, q) else 1)
+        res["TF-IDF"]["abstain"] += (0 if r_tfidf(chunks, q, tfidf) else 1)
         res["BM25"]["abstain"] += (0 if r_bm25(chunks, q, bm25) else 1)
         if vec_mat is not None:
             res["VECTOR RAG"]["abstain"] += (0 if r_vector(chunks, q, vec_mat, embed_one) else 1)
+        res["HYBRID (BM25+vec RRF)"]["abstain"] += (0 if r_hybrid(chunks, q, bm25, vec_mat, embed_one) else 1)
         a = sr.answer(q)
         res["SMART RAG"]["abstain"] += (1 if a.status in ("NOT_FOUND", "INSUFFICIENT_EVIDENCE") else 0)
 
@@ -198,14 +263,14 @@ def main():
     print(f"\n=== Smart RAG vs competitors — {args.path} ===")
     print(f"corpus: {len(chunks):,} chunks · {toks(raw_blob):,} tokens · "
           f"{len(labels)} labeled queries · {len(rejects)} reject queries\n")
-    hdr = f"{'method':<14}{'avg answer toks':>16}{'correct':>10}{'abstain':>10}{'cites?':>9}"
+    hdr = f"{'method':<22}{'avg answer toks':>16}{'correct':>10}{'abstain':>10}{'cites?':>9}"
     print(hdr); print("-" * len(hdr))
     for m in methods:
         r = res[m]
-        if m == "VECTOR RAG" and vec_mat is None:
-            print(f"{m:<14}{'(no embedder — skipped)':>45}"); continue
+        if m in ("VECTOR RAG", "HYBRID (BM25+vec RRF)") and vec_mat is None:
+            print(f"{m:<22}{'(no embedder — skipped)':>43}"); continue
         cite = "yes" if r["cite"] else "no"
-        print(f"{m:<14}{avg(r['atoks']):>16,}{pct(r['correct'],r['ans_n']):>10}"
+        print(f"{m:<22}{avg(r['atoks']):>16,}{pct(r['correct'],r['ans_n']):>10}"
               f"{pct(r['abstain'],r['rej_n']):>10}{cite:>9}")
     print("\nNotes: 'avg answer toks' = tokens sent to the LLM per query (lower=cheaper).")
     print("'cites?' = can the method attribute its answer to a source (groundable).")

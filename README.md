@@ -37,26 +37,41 @@ honestly, and cites every answer. Run the benchmark on your own data and see.
 
 ### Head-to-head vs other approaches
 
-Five methods, same corpus, same questions — each implemented as its real core (not
-a vendor's tuned config). Run it yourself: `python scripts/benchmark.py <file>
---labels labels.csv --reject "q1;;q2"`. Example (200-row spec table, 4 lookups, 3
-unanswerable queries):
+Seven methods, same corpus, same questions — each implemented as its real core (not
+a vendor's tuned config). Reproduce it yourself:
+
+```bash
+python scripts/make_example.py        # public 200-row sample, no real data
+python scripts/benchmark.py example_spec.xlsx --labels example_labels.csv \
+       --reject "price of bitcoin;;how to bake a cake;;who won the world cup"
+```
 
 | Method | Answer tokens/query | Correct | Abstains on junk | Cites sources |
 |---|---|---|---|---|
 | Raw dump (paste it all) | 6,999 | 100% | ❌ 0% | ❌ |
 | Flat keyword RAG | 279 | 100% | ✅ | ❌ |
+| TF-IDF (sklearn) | 34 | 100% | ✅ | ❌ |
 | BM25 (classic IR) | 279 | 100% | ⚠️ 67% | ❌ |
 | Vector RAG (same embedder) | 279 | 100% | ✅ | ❌ |
+| Hybrid BM25+vector (RRF) | 279 | 100% | ⚠️ 67% | ❌ |
 | **Smart RAG** | **36** | 100% | ✅ | ✅ |
 
-On easy lookups everything is "correct" — that's expected. The difference is what
-you **pay** and whether you can **trust** it: Smart RAG sends **~8× fewer tokens**
-than the RAG baselines (190× fewer than raw dump), is the **only one that cites its
-source**, and abstains reliably (BM25 returned junk for an unanswerable query). On
-messy/structured data the gap widens — Smart RAG preserves structure and dedups
-where flat/vector RAG chunk it away. *(Numbers are from a public sample corpus;
-reproduce on your own with the command above.)*
+**Read this honestly:** on easy lookups *every* method is "correct" — that's
+expected, and we don't hide it (TF-IDF even edges out Smart RAG on tokens here on a
+tiny clean table). The differences that matter when you **can't eyeball the answer**:
+
+- **Smart RAG is the only method that cites its source** — all six competitors
+  return text with no provenance, so an LLM can't ground or attribute the answer.
+- **Reliable abstention**: BM25 and even modern **Hybrid RAG** return *junk* for
+  unanswerable queries (67%) — they hand the LLM something plausible-but-wrong.
+  Smart RAG says NOT_FOUND.
+- **Cost**: ~8× fewer tokens than the keyword/vector/hybrid baselines, 190× fewer
+  than raw-dump.
+
+On **messy or structured data** the gap widens further — Smart RAG preserves
+structure and deduplicates where flat/vector RAG chunk it away (see the
+[logs/tabular comparison](#measured-comparison-python--m-smart_ragcompare) above).
+*(Numbers from the public sample; run it on your own data.)*
 
 ### Smart RAG's tabular emit — TOON's good idea, improved
 
