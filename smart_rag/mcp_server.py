@@ -21,9 +21,18 @@ works without extra deps (the agent can still call it).
 from __future__ import annotations
 
 import json
+import os
 import sys
 
-from smart_rag.collectors import IndexManager
+# Self-locate the package so the server runs whether launched as
+#   python -m smart_rag.mcp_server   (needs smart_rag on the path), OR
+#   python /abs/path/to/smart_rag/mcp_server.py   (path-independent — robust for MCP
+#   clients that don't reliably honor a PYTHONPATH env, e.g. Claude on Windows).
+_REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if _REPO_ROOT not in sys.path:
+    sys.path.insert(0, _REPO_ROOT)
+
+from smart_rag.collectors import IndexManager  # noqa: E402
 
 _MGR = IndexManager()
 
