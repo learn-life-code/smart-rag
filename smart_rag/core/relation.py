@@ -58,9 +58,16 @@ def relation_attr_for(query: str) -> str:
 
 
 def walk_relations(store, entity: str, attribute: str = "",
-                   reverse: bool = False, limit: int = 30) -> List[dict]:
+                   reverse: bool = False, limit: int = 30,
+                   internal_only: bool = False) -> List[dict]:
     """Return edges for an entity. reverse=True finds who points AT it
-    (e.g. 'what CALLS X' = entities whose 'calls' value == X)."""
+    (e.g. 'what CALLS X' = entities whose 'calls' value == X).
+
+    internal_only=True keeps only edges whose CALLEE is itself a defined entity in
+    the store (i.e. a function in YOUR code), dropping calls to libc/macros/externals
+    — so 'what does X call' shows your own code's calls, not library noise. Each
+    edge is tagged 'internal': True/False either way."""
+    ents = set(store.entities)   # known symbols → an edge to one of these is internal
     out: List[dict] = []
     if reverse:
         for ent in store.entities:
@@ -71,7 +78,8 @@ def walk_relations(store, entity: str, attribute: str = "",
                     for r in rows:
                         if r["value"] == entity:
                             out.append({"from": ent, "rel": attr, "to": entity,
-                                        "source": (r["sources"] or ["?"])[0]})
+                                        "source": (r["sources"] or ["?"])[0],
+                                        "internal": True})  # caller is a known entity
                 if len(out) >= limit:
                     return out
     else:
@@ -80,8 +88,12 @@ def walk_relations(store, entity: str, attribute: str = "",
                 continue
             if attr.lower() in RELATION_ATTRS:
                 for r in rows:
+                    is_internal = r["value"] in ents
+                    if internal_only and not is_internal:
+                        continue   # drop calls to externals (libc/macros)
                     out.append({"from": entity, "rel": attr, "to": r["value"],
-                                "source": (r["sources"] or ["?"])[0]})
+                                "source": (r["sources"] or ["?"])[0],
+                                "internal": is_internal})
             if len(out) >= limit:
                 break
     return out

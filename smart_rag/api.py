@@ -325,15 +325,32 @@ class SmartRAG:
             and "called by" not in query.lower()
         # "what calls X" → reverse (who points at X); "what does X call" → forward
         forward = bool(__import__("re").search(r'\bdoes\b.*\b(call|import|depend|contain)', query, __import__("re").I))
-        edges = _rel.walk_relations(self.store, target, rel_attr,
-                                    reverse=not forward, limit=30)
-        if not edges:
+        all_edges = _rel.walk_relations(self.store, target, rel_attr,
+                                        reverse=not forward, limit=60)
+        if not all_edges:
             return None
+        # INTERNAL-FIRST: for forward "what does X call", lead with edges to your own
+        # defined functions (internal), then external (libc/macros). Lets an agent see
+        # the real code structure without library noise drowning it.
+        internal = [e for e in all_edges if e.get("internal")]
+        external = [e for e in all_edges if not e.get("internal")]
+        edges = (internal + external)[:30]
+        shown = internal if (forward and internal) else edges
+        ext_note = ""
+        if forward and internal and external:
+            ext_note = (f"\n  (+ {len(external)} call(s) to external/library functions "
+                        f"— ask 'including external' to see them)")
         ev = [Evidence(text=f"{e['from']} {e['rel']} {e['to']}", source=e["source"])
-              for e in edges[:8]]
+              for e in shown[:8]]
+        # honor an explicit "including external/library/all" request (word-bounded,
+        # so 'call' doesn't trigger on the 'all' substring).
+        if __import__("re").search(r'\b(external|library|all|everything)\b',
+                                   query, __import__("re").I):
+            shown = edges; ext_note = ""
         body = (f"{target} — {('callers/sources' if not forward else 'targets')} "
-                f"({len(edges)}):\n  " + "\n  ".join(
-                    f"{e['from']} —{e['rel']}→ {e['to']}   [{e['source']}]" for e in edges[:12]))
+                f"({len(shown)}):\n  " + "\n  ".join(
+                    f"{e['from']} —{e['rel']}→ {e['to']}   [{e['source']}]"
+                    for e in shown[:12]) + ext_note)
         return AnswerResult(status="ANSWERED", query=query, confidence="HIGH",
                             evidence=ev, answer=body)
 
