@@ -67,20 +67,18 @@ class IndexManager:
         files = list(collect_fs(source, max_file_mb=max_file_mb))
         if verbose:
             print(f"[smartrag] indexing '{name}': {len(files)} files from {source}")
-        used = empty = skipped = errs = 0
         t0 = time.time()
-        from smart_rag.adapters import adapter_for
-        for i, f in enumerate(files, 1):
-            if not adapter_for(f):
-                skipped += 1
-                continue
-            st = sr.ingest(f, verbose=False)
-            used += st.get("files_ingested", 0)
-            empty += st.get("files_empty", 0)
-            skipped += st.get("files_skipped_unchanged", 0)
-            errs += len(st.get("errors", []))
-            if verbose and i % 200 == 0:
-                print(f"[smartrag]   {i}/{len(files)} files…")
+        # ONE batched ingest over the noise-filtered files — FTS rebuild + embedding
+        # happen ONCE at the end (calling ingest per-file was O(n²) → hours on big
+        # folders). The fs collector already skipped .git/node_modules/binaries.
+        st = sr.ingest_paths(files, verbose=verbose, prune_under=source)
+        # load the just-persisted vectors into the hot prose index so the FIRST query
+        # (before any reopen) can do semantic search — otherwise it abstains.
+        sr._load_persisted_prose_index()
+        used = st.get("files_ingested", 0)
+        empty = st.get("files_empty", 0)
+        skipped = st.get("files_skipped_unsupported", 0) + st.get("files_skipped_unchanged", 0)
+        errs = len(st.get("errors", []))
         stats = sr.store.stats() if hasattr(sr.store, "stats") else {}
         self._open[name] = sr
         cat = self._catalog()

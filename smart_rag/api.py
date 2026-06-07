@@ -64,8 +64,16 @@ class SmartRAG:
         user can see exactly what happened on a real folder. Set verbose=False to
         silence.
         """
-        from smart_rag.core.fact import source_id_for
         paths = self._collect(path, recursive)
+        return self.ingest_paths(paths, verbose=verbose,
+                                 prune_under=path if os.path.isdir(path) else None)
+
+    def ingest_paths(self, paths, *, verbose: bool = True, prune_under=None) -> dict:
+        """Ingest a PRE-COLLECTED list of files, doing FTS rebuild + embedding ONCE
+        at the end (not per file). This is the fast path for a large folder — calling
+        ingest() per-file rebuilds FTS O(n) times → O(n²) and takes hours. Collectors
+        pass their noise-filtered file list here."""
+        from smart_rag.core.fact import source_id_for
         supported = [p for p in paths if adapter_for(p)]
         used = empty = skipped_unchanged = 0
         skipped_unsupported = len(paths) - len(supported)
@@ -122,11 +130,12 @@ class SmartRAG:
                 print(f"[distill]   {i}/{len(supported)} files…")
 
         if self.db is not None:
-            # A FULL-FOLDER ingest also removes DELETED sources (not for single-file).
-            if os.path.isdir(path):
+            # A FULL-FOLDER ingest also removes DELETED sources (prune_under set).
+            if prune_under and os.path.isdir(prune_under):
+                base = os.path.abspath(prune_under)
                 for gone in (self.db.known_source_ids() - seen_ids):
                     sp = self.db.source_path(gone) or ""
-                    if sp and sp.startswith(os.path.abspath(path)) and not os.path.exists(sp):
+                    if sp and sp.startswith(base) and not os.path.exists(sp):
                         self.db.remove_source(gone)
                         self.store.remove_source_id(gone)
             # FTS + embeddings run for BOTH single-file and folder ingests (a
