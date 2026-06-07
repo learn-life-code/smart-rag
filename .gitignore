@@ -29,3 +29,5 @@ htmlcov/
 
 # HF cache (never commit models)
 .cache/
+example_spec.xlsx
+example_labels.csv

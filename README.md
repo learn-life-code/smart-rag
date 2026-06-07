@@ -35,6 +35,29 @@ relevant slice, abstains when it doesn't know, and cites every answer.
 *retrieval system* that works on **any** shape, sends the least per query, abstains
 honestly, and cites every answer. Run the benchmark on your own data and see.
 
+### Head-to-head vs other approaches
+
+Five methods, same corpus, same questions — each implemented as its real core (not
+a vendor's tuned config). Run it yourself: `python scripts/benchmark.py <file>
+--labels labels.csv --reject "q1;;q2"`. Example (200-row spec table, 4 lookups, 3
+unanswerable queries):
+
+| Method | Answer tokens/query | Correct | Abstains on junk | Cites sources |
+|---|---|---|---|---|
+| Raw dump (paste it all) | 6,999 | 100% | ❌ 0% | ❌ |
+| Flat keyword RAG | 279 | 100% | ✅ | ❌ |
+| BM25 (classic IR) | 279 | 100% | ⚠️ 67% | ❌ |
+| Vector RAG (same embedder) | 279 | 100% | ✅ | ❌ |
+| **Smart RAG** | **36** | 100% | ✅ | ✅ |
+
+On easy lookups everything is "correct" — that's expected. The difference is what
+you **pay** and whether you can **trust** it: Smart RAG sends **~8× fewer tokens**
+than the RAG baselines (190× fewer than raw dump), is the **only one that cites its
+source**, and abstains reliably (BM25 returned junk for an unanswerable query). On
+messy/structured data the gap widens — Smart RAG preserves structure and dedups
+where flat/vector RAG chunk it away. *(Numbers are from a public sample corpus;
+reproduce on your own with the command above.)*
+
 ### Smart RAG's tabular emit — TOON's good idea, improved
 
 TOON's win is **schema-once**: declare columns once, then emit bare value rows.
