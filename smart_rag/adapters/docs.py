@@ -19,7 +19,8 @@ _HEADER = re.compile(r'^(#{1,6})\s+(.*)$')
 
 class DocsAdapter(Adapter):
     suffixes = (".md", ".rst", ".docx", ".pdf", ".doc", ".markdown",
-                ".html", ".htm", ".xvp")   # html docs + Vector panel XML (text)
+                ".html", ".htm", ".xvp",   # html docs + Vector panel XML (text)
+                ".pptx", ".vsdx")          # slides + Visio diagrams (zip-XML)
     name = "docs"
 
     def extract(self, path: str) -> Iterable[Fact]:
@@ -36,6 +37,8 @@ class DocsAdapter(Adapter):
                 yield from self._chunk_docx(path, src)
             elif low.endswith(".pdf"):
                 yield from self._chunk_pdf(path, src)
+            elif low.endswith((".pptx", ".vsdx")):
+                yield from self._chunk_office_zip(path, src)
             elif low.endswith((".html", ".htm", ".xvp")):
                 # strip tags → plain text, then chunk like markdown
                 raw = open(path, encoding="utf-8", errors="replace").read()
@@ -109,3 +112,40 @@ class DocsAdapter(Adapter):
                     yield {"text": t[j:j + 1500], "source": src,
                            "title": f"{src} › p{i+1}"}
         doc.close()
+
+    def _chunk_office_zip(self, path: str, src: str) -> Iterable[dict]:
+        """PPTX/VSDX are zip archives of XML. Pull the visible text per slide/page
+        — no extra deps (stdlib zipfile + regex). PPTX text is in <a:t>, Visio in
+        <Text>. One chunk per slide/page so a query cites the right slide."""
+        import re as _re
+        import zipfile
+        try:
+            zf = zipfile.ZipFile(path)
+        except Exception:
+            return
+        low = path.lower()
+        try:
+            if low.endswith(".pptx"):
+                slides = sorted(n for n in zf.namelist()
+                                if _re.match(r"ppt/slides/slide\d+\.xml$", n))
+                for i, name in enumerate(slides, 1):
+                    xml = zf.read(name).decode("utf-8", "replace")
+                    texts = _re.findall(r"<a:t>(.*?)</a:t>", xml, _re.S)
+                    body = " ".join(t.strip() for t in texts if t.strip())
+                    body = _re.sub(r"&[a-z]+;", " ", body)
+                    if body:
+                        yield {"text": body[:2000], "source": src,
+                               "title": f"{src} › slide {i}"}
+            else:  # .vsdx (Visio) — pages under visio/pages/
+                pages = sorted(n for n in zf.namelist()
+                               if _re.match(r"visio/pages/page\d+\.xml$", n))
+                for i, name in enumerate(pages, 1):
+                    xml = zf.read(name).decode("utf-8", "replace")
+                    texts = _re.findall(r"<Text[^>]*>(.*?)</Text>", xml, _re.S)
+                    texts = [_re.sub(r"<[^>]+>", "", t).strip() for t in texts]
+                    body = " ".join(t for t in texts if t)
+                    if body:
+                        yield {"text": body[:2000], "source": src,
+                               "title": f"{src} › page {i}"}
+        finally:
+            zf.close()

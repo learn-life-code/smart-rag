@@ -36,6 +36,16 @@ class Adapter:
     suffixes: tuple = ()
     name: str = "base"
 
+    # TYPED-SCHEMA CONTRACT (the world-standard "schema-aware" move): an adapter
+    # declares the entity TYPES it emits and, optionally, the standard it targets.
+    # This is metadata, not enforcement — it lets Smart RAG report coverage by type
+    # ("12 DTCs, 4 diag_services from this ODX") and lets callers validate that a
+    # source produced the expected structure. Generalizes the AUTOSAR _SUPPORTED set.
+    #   emits = ("dtc", "diag_service", "did")   # entity 'autosar_type' values
+    #   standard = "ISO 22901 (ODX)"
+    emits: tuple = ()
+    standard: str = ""
+
     def can_handle(self, path: str) -> bool:
         p = path.lower()
         return any(p.endswith(s) for s in self.suffixes)

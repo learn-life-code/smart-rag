@@ -13,17 +13,27 @@ from smart_rag.adapters.code import CodeAdapter
 from smart_rag.adapters.autosar import AutosarAdapter
 from smart_rag.adapters.config import ConfigAdapter
 from smart_rag.adapters.codegraph import CodegraphAdapter
+from smart_rag.adapters.openapi import OpenAPIAdapter
+from smart_rag.adapters.automotive_std import AutomotiveStdAdapter
+from smart_rag.adapters.chip_std import ChipStdAdapter
 
 _CODE = CodeAdapter()
 _DOCS = DocsAdapter()
 _AUTOSAR = AutosarAdapter()
 _CONFIG = ConfigAdapter()
 _CODEGRAPH = CodegraphAdapter()
+_OPENAPI = OpenAPIAdapter()
+_AUTO_STD = AutomotiveStdAdapter()
+_CHIP = ChipStdAdapter()
 _LOGS = LogsAdapter()
 _TABULAR = TabularAdapter()
 
-# Codegraph (.db with nodes+edges) checked FIRST (content-sniffed, specific).
-ADAPTERS = [_CODEGRAPH, _CODE, _DOCS, _AUTOSAR, _CONFIG, _TABULAR, _LOGS]
+# Content-sniffed / specific adapters FIRST so .xml/.yaml/.json route to the right
+# domain handler before the generic config/tabular catch them:
+#   codegraph (.db nodes+edges) · openapi (yaml/json w/ openapi marker) ·
+#   chip (.sp/.cir + ip-xact .xml) · automotive_std (.odx/.a2l) · autosar (.dbc/.arxml)
+ADAPTERS = [_CODEGRAPH, _OPENAPI, _CHIP, _AUTO_STD, _AUTOSAR, _CODE, _DOCS,
+            _CONFIG, _TABULAR, _LOGS]
 
 _LOGLIKE = re.compile(
     r'\b\d{1,2}:\d{2}:\d{2}\b|\b\d{4}-\d{2}-\d{2}\b|\[(ERROR|WARN|INFO|DEBUG)\]|'

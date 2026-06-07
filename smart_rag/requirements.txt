@@ -1,4 +1,4 @@
-# Distill — self-contained dependencies
+# Smart RAG — self-contained dependencies
 # Core (always needed)
 numpy>=1.24.0
 openpyxl>=3.1.0
@@ -13,6 +13,10 @@ transformers>=4.41.0,<4.57.0
 tokenizers>=0.20.0          # has prebuilt cp313 wheels (0.19 does NOT)
 # Document adapters
 pymupdf>=1.24.0        # PDF (datasheets, reports)
-python-docx>=1.1.0     # Word (ODX, specs)
+python-docx>=1.1.0     # Word (specs)
+# Format/standard adapters (optional — each degrades gracefully if absent)
+pyyaml>=6.0            # YAML config + OpenAPI specs
+pyarrow>=14.0          # Parquet (analytics/data-lake tables)
+# tomllib is stdlib on 3.11+; pptx/vsdx use stdlib zipfile (no extra dep)
 # Optional: tiktoken for the benchmark token counts
 tiktoken>=0.5.0

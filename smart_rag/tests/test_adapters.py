@@ -101,6 +101,38 @@ def main():
           "UFS:num/gb" in out and "| src" in out and "128" in out and "128GB" not in out)
     check("tabular emit: bool canonicalized (yes→true)", "true" in out)
 
+    # ── world-standard adapters (YAML, SPICE, OpenAPI, ODX, A2L) ─────────────
+    f = _w(tmp, "c.yaml", "db:\n  host: h1\n  port: 5432\n")
+    facts = list(adapter_for(f).extract(f))
+    check("yaml: nested db.host=h1", any(x.entity == "db" and x.attribute == "host"
+                                         and x.value == "h1" for x in facts))
+
+    f = _w(tmp, "ckt.sp", "* c\nR1 a b 1k\nM1 d g s s NMOS\n")
+    facts = list(adapter_for(f).extract(f))
+    rels = [x for x in facts if x.kind == "relation"]
+    check("spice: M1 mosfet connected_to its nets (relation graph)",
+          any(x.entity == "M1" and x.attribute == "connected_to" for x in rels))
+
+    f = _w(tmp, "api.yaml",
+           "openapi: 3.0.0\ninfo:\n  title: API\n  version: '1'\npaths:\n"
+           "  /u:\n    get:\n      summary: list\n")
+    facts = list(adapter_for(f).extract(f))
+    check("openapi: endpoint 'GET /u' extracted",
+          any(x.entity == "GET /u" and x.value == "endpoint" for x in facts))
+
+    f = _w(tmp, "d.odx", '<?xml version="1.0"?><ODX><DTC><SHORT-NAME>P0420'
+           '</SHORT-NAME><TROUBLE-CODE>1056</TROUBLE-CODE></DTC></ODX>')
+    facts = list(adapter_for(f).extract(f))
+    check("odx: DTC P0420 with trouble_code (ISO 22901)",
+          any(x.entity == "P0420" and x.attribute == "trouble_code" for x in facts))
+
+    f = _w(tmp, "e.a2l", '/begin MEASUREMENT Speed "RPM" UWORD CM_X 0 0 0 9\n'
+           '  PHYS_UNIT "rpm"\n/end MEASUREMENT')
+    facts = list(adapter_for(f).extract(f))
+    check("a2l: MEASUREMENT Speed with unit (ASAM MCD-2 MC)",
+          any(x.entity == "Speed" and x.attribute == "unit" and x.value == "rpm"
+              for x in facts))
+
     import shutil
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n=== adapters: {_PASS}/{_PASS+_FAIL} passed ===")

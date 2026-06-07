@@ -36,7 +36,7 @@ def _maybe_date(v) -> str:
 
 
 class TabularAdapter(Adapter):
-    suffixes = (".xlsx", ".xlsm", ".xls", ".csv", ".json")
+    suffixes = (".xlsx", ".xlsm", ".xls", ".csv", ".json", ".parquet")
     name = "tabular"
 
     def extract(self, path: str) -> Iterable[Fact]:
@@ -47,6 +47,42 @@ class TabularAdapter(Adapter):
             yield from self._extract_csv(path)
         elif low.endswith(".json"):
             yield from self._extract_json(path)
+        elif low.endswith(".parquet"):
+            yield from self._extract_parquet(path)
+
+    # ── Parquet (analytics/data-lake standard) ───────────────────────────────
+    def _extract_parquet(self, path: str) -> Iterable[Fact]:
+        """Read .parquet via pyarrow → rows as entity-attribute facts. The first
+        id-like column is the entity; other columns are attributes."""
+        import os
+        try:
+            import pyarrow.parquet as pq
+        except Exception:
+            return   # pyarrow not installed → silently skip (graceful)
+        try:
+            tbl = pq.read_table(path)
+        except Exception:
+            return
+        src = os.path.basename(path)
+        cols = tbl.column_names
+        if not cols:
+            return
+        from smart_rag.core.entity import is_strong_entity, entity_key
+        rows = tbl.to_pylist()
+        # pick an entity column: first whose values look like ids, else first col
+        ent_col = next((c for c in cols
+                        if any(is_strong_entity(r.get(c)) for r in rows[:50])), cols[0])
+        for r in rows:
+            raw = r.get(ent_col)
+            if raw is None or not str(raw).strip():
+                continue
+            ent = entity_key(str(raw))
+            for c in cols:
+                if c == ent_col:
+                    continue
+                v = r.get(c)
+                if v is not None and str(v).strip():
+                    yield Fact(entity=ent, attribute=c, value=str(v), source=src)
 
     # ── Excel (structure-preserving) ─────────────────────────────────────────
     def _extract_excel(self, path: str) -> Iterable[Fact]:

@@ -89,7 +89,7 @@ smart_rag/
     answer.py     AnswerResult — status + evidence + confidence (the trust surface)
     relation.py   entity→entity edges (codegraph/AUTOSAR absorbed as relations)
     embed.py      self-contained embeddings (GPU→CPU, offline-capable)
-  adapters/       tabular, logs, docs, code, config, autosar, codegraph
+  adapters/       see "Formats & standards" below
   tests/          run_all.py → adapters + lifecycle + adversarial suites
   compare.py      Smart RAG vs Flat vs TOON benchmark
   cli.py / gui.py interfaces
@@ -105,6 +105,26 @@ python -m smart_rag.tests.run_all
 The adversarial suite covers the cases that break naive RAG: duplicate filenames,
 restart-then-update/delete, unknown-id-with-prose, schema migration, JSONL
 round-trip, single-file vectors, AUTOSAR ref-ownership.
+
+## Formats & standards
+
+Smart RAG reads common formats **and** real engineering interchange standards —
+because the entity-relation model fits structured standards naturally:
+
+| Domain | Formats / standards |
+|---|---|
+| **General** | Excel/CSV/JSON, **Parquet**, **YAML/TOML**, INI/cfg/properties, Markdown/PDF/DOCX/HTML, **PPTX/Visio** |
+| **Software** | source code (multi-language), **OpenAPI/Swagger** specs, codegraph symbol DBs |
+| **Automotive** | **AUTOSAR ARXML**, **DBC** (CAN), **ODX** (ISO 22901 diagnostics/DTCs), **A2L** (ASAM MCD-2 MC calibration) |
+| **Semiconductor** | **IP-XACT** (IEEE 1685), **SPICE netlists** (component→net graph) |
+| **Logs** | DLT, logcat, slog, generic text |
+
+Adding a format = one adapter (`smart_rag/adapters/`), 30-100 lines; the core never
+changes. Adapters declare the entity types they emit (`emits`) and the `standard`
+they target, so coverage is reportable ("12 DTCs, 4 services from this ODX").
+
+Optional parsers degrade gracefully: no `pyarrow` → Parquet skipped; no `pyyaml` →
+YAML skipped. Everything else keeps working.
 
 ## Design principles
 
