@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>RTC Analyzer — Setup Guide</title>
+<style>
+  :root{
+    --bg:#0f172a; --card:#1e293b; --ink:#e2e8f0; --muted:#94a3b8;
+    --accent:#38bdf8; --good:#22c55e; --warn:#f59e0b; --bad:#ef4444;
+    --code-bg:#0b1220;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;font-family:'Segoe UI',system-ui,Arial,sans-serif;
+    background:var(--bg);color:var(--ink);line-height:1.6;}
+  header{background:linear-gradient(135deg,#0ea5e9,#6366f1);padding:34px 20px;text-align:center;}
+  header h1{margin:0;font-size:30px;}
+  header p{margin:8px 0 0;color:#e0f2fe;font-size:16px;}
+  .wrap{max-width:920px;margin:0 auto;padding:24px 18px 60px;}
+  .lead{background:var(--card);border-radius:14px;padding:20px 24px;margin:22px 0;
+    border-left:5px solid var(--accent);}
+  .lead b{color:var(--accent);}
+  h2{font-size:22px;margin:38px 0 14px;border-bottom:1px solid #334155;padding-bottom:8px;}
+  .step{background:var(--card);border-radius:14px;padding:22px 24px;margin:16px 0;
+    box-shadow:0 4px 18px rgba(0,0,0,.35);}
+  .step .num{display:inline-flex;align-items:center;justify-content:center;
+    width:34px;height:34px;border-radius:50%;background:var(--accent);color:#082f49;
+    font-weight:700;font-size:17px;margin-right:10px;vertical-align:middle;}
+  .step h3{display:inline;font-size:19px;vertical-align:middle;}
+  pre{background:var(--code-bg);border:1px solid #1e293b;border-radius:10px;
+    padding:14px 16px;overflow-x:auto;position:relative;}
+  code{font-family:'Cascadia Code',Consolas,monospace;font-size:14px;color:#7dd3fc;}
+  .copy{position:absolute;top:8px;right:8px;background:#334155;border:none;color:#cbd5e1;
+    border-radius:6px;padding:4px 10px;font-size:12px;cursor:pointer;}
+  .copy:hover{background:#475569;}
+  .pill{display:inline-block;padding:3px 11px;border-radius:20px;font-size:13px;font-weight:600;}
+  .pill.good{background:rgba(34,197,94,.18);color:#86efac;}
+  .pill.warn{background:rgba(245,158,11,.18);color:#fcd34d;}
+  .pill.bad{background:rgba(239,68,68,.18);color:#fca5a5;}
+  .branch{border:2px dashed #334155;border-radius:14px;padding:6px 22px 18px;margin:14px 0;}
+  .branch.green{border-color:var(--good);}
+  .branch.amber{border-color:var(--warn);}
+  .branch h3{margin-top:16px;}
+  .decision{background:#172033;border-radius:14px;padding:20px 24px;text-align:center;margin:22px 0;}
+  .decision .q{font-size:18px;font-weight:600;margin-bottom:14px;}
+  .arrow{font-size:22px;color:var(--muted);text-align:center;margin:4px 0;}
+  table{width:100%;border-collapse:collapse;margin:10px 0;}
+  th,td{padding:9px 12px;text-align:left;border-bottom:1px solid #334155;font-size:14px;}
+  th{color:var(--accent);}
+  .note{font-size:14px;color:var(--muted);margin-top:8px;}
+  .big-ok{color:var(--good);font-weight:700;}
+  .big-bad{color:var(--bad);font-weight:700;}
+  kbd{background:#334155;border-radius:4px;padding:1px 6px;font-size:13px;}
+  .check{list-style:none;padding-left:0;}
+  .check li{padding:6px 0 6px 30px;position:relative;}
+  .check li::before{content:'✓';position:absolute;left:0;color:var(--good);font-weight:700;}
+  footer{text-align:center;color:var(--muted);font-size:13px;padding:30px;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🔍 RTC Analyzer — Setup Guide</h1>
+  <p>Copy the folder to your PC, follow the steps, and you're ready. No coding needed.</p>
+</header>
+
+<div class="wrap">
+
+  <div class="lead">
+    <b>What this is:</b> The RTC Analyzer reads a bug folder and finds the root cause.
+    It works best when it has a <b>search database (<code>.db</code>)</b> built from the
+    software — that lets it answer in seconds with cited sources instead of reading
+    everything slowly. This guide gets you from a <b>fresh PC</b> to <b>running</b>, and
+    shows you exactly what to do <b>if the database doesn't exist yet</b>.
+  </div>
+
+  <h2>Part 1 · One-time setup (do this once per PC)</h2>
+
+  <div class="step">
+    <span class="num">1</span><h3>Copy the whole folder to your PC</h3>
+    <p>Copy the entire <code>Industrialization</code> folder anywhere on your machine
+    (e.g. <code>C:\Tools\Industrialization</code>). Keep all files together.</p>
+    <p class="note">⚠ If you copied a <code>.venv</code> folder from another PC, it
+    won't work here — the next step rebuilds it correctly.</p>
+  </div>
+
+  <div class="step">
+    <span class="num">2</span><h3>Run the setup script</h3>
+    <p>Open <b>PowerShell</b> in the folder (Shift + right-click → "Open PowerShell here"),
+    then paste:</p>
+    <pre><button class="copy">Copy</button><code>powershell -ExecutionPolicy Bypass -File .\setup_venv.ps1</code></pre>
+    <p>Behind a company network/proxy? Add your proxy:</p>
+    <pre><button class="copy">Copy</button><code>powershell -ExecutionPolicy Bypass -File .\setup_venv.ps1 -Proxy http://rb-proxy-na.bosch.com:8080</code></pre>
+    <p>It finds the right Python, builds the environment, installs everything, and ends
+    with a clear status. Look for:</p>
+    <ul class="check">
+      <li><span class="pill good">✅ READY</span> — you're good</li>
+      <li><b>Retrieval mode: hybrid</b> = best (semantic search) &nbsp;·&nbsp;
+          <b>keyword-only</b> = still works, just no "how does X work" search</li>
+    </ul>
+    <p class="note">No Python installed? Install <b>Python 3.13</b> from python.org first,
+    then re-run. The script will tell you if anything is missing.</p>
+  </div>
+
+  <h2>Part 2 · The database (<code>.db</code>) — the important part</h2>
+
+  <div class="decision">
+    <div class="q">❓ Do you already have a database for your software build?</div>
+    <p class="note">A database is a file named <code>baseline_distill.db</code> (or a
+    <code>.codegraph/codegraph.db</code>) that sits with your software build.</p>
+  </div>
+
+  <div class="arrow">⬇ &nbsp;&nbsp; pick the branch that matches you &nbsp;&nbsp; ⬇</div>
+
+  <div class="branch green">
+    <span class="num" style="background:var(--good);color:#052e16;">A</span>
+    <h3>YES — I have the <code>.db</code> already</h3>
+    <p>Great — just point the RTC Analyzer at it. Launch the app:</p>
+    <pre><button class="copy">Copy</button><code>run_gui.bat</code></pre>
+    <p>In the app's <b>Settings</b>, find <b>"CodeGraph DB or Build Root"</b> and paste
+    the path to your build folder (or directly to the <code>.db</code> using the
+    <kbd>.db</kbd> button). Then run your bug folder.</p>
+    <p class="big-ok">✓ Done — the analyzer will use the database automatically.</p>
+  </div>
+
+  <div class="branch amber">
+    <span class="num" style="background:var(--warn);color:#451a03;">B</span>
+    <h3>NO — I don't have a <code>.db</code> yet (or not sure)</h3>
+    <p>No problem — <b>create it once</b> from your software folder. It takes about a
+    minute. In PowerShell:</p>
+    <pre><button class="copy">Copy</button><code>py -3.13 scripts/distill_baseline.py "C:\path\to\your\software\build"</code></pre>
+    <p>When it finishes it prints a line like:</p>
+    <pre><code>✅ BASELINE READY
+   PASTE THIS PATH into the RTC analyzer:
+   ...\.codegraph\baseline_distill.db</code></pre>
+    <p>Copy that path, launch <code>run_gui.bat</code>, and paste it into
+    <b>"CodeGraph DB or Build Root"</b> (Branch A above). That's it.</p>
+
+    <p style="margin-top:18px;"><b>What if it says some files need CodeGraph?</b></p>
+    <p>If your build has firmware binaries (like <code>.elf</code>/<code>.img</code>/<code>.mbn</code>),
+    you'll see a message: <span class="pill warn">⚠ Run codegraph first</span>.
+    Those are compiled files the analyzer can't read directly. Run CodeGraph on the
+    folder first, then re-run the command above — it will include them automatically.</p>
+  </div>
+
+  <h2>Part 3 · How do I KNOW it has a database? (visual check)</h2>
+
+  <div class="step">
+    <p>Run this any time to see what's set up:</p>
+    <pre><button class="copy">Copy</button><code>py -3.13 -m smart_rag.cli indexes</code></pre>
+    <table>
+      <tr><th>What you see</th><th>Meaning</th><th>Do</th></tr>
+      <tr><td><span class="big-ok">a name + entities/facts listed</span></td>
+          <td>Database exists ✓</td><td>Use it (Branch A)</td></tr>
+      <tr><td><span class="big-bad">"No indexes"</span></td>
+          <td>No database yet</td><td>Create it (Branch B)</td></tr>
+    </table>
+    <p class="note">The databases live in
+    <code>C:\Users\&lt;you&gt;\.smartrag\indexes\</code> (central) or next to your build
+    folder. The analyzer finds them by the path you set in Settings.</p>
+  </div>
+
+  <h2>Part 4 · Run a bug analysis</h2>
+  <div class="step">
+    <span class="num">1</span><h3>Open the analyzer</h3>
+    <pre><button class="copy">Copy</button><code>run_gui.bat</code></pre>
+    <span class="num">2</span><h3>Set the database path once (Settings)</h3>
+    <p>Paste your build/​db path into <b>"CodeGraph DB or Build Root"</b>.</p>
+    <span class="num">3</span><h3>Point it at a bug folder and analyze</h3>
+    <p>The analyzer reads the logs, uses the database for fast cited evidence, and
+    produces the root cause.</p>
+  </div>
+
+  <div class="lead" style="border-left-color:var(--good);">
+    <b>The 30-second summary:</b>
+    <ol style="margin:8px 0 0;">
+      <li>Copy folder → run <code>setup_venv.ps1</code> (once).</li>
+      <li>Have a <code>.db</code>? Paste its path in Settings. Don't have one?
+          Run <code>distill_baseline.py "your-build"</code> to create it.</li>
+      <li>Run <code>run_gui.bat</code>, pick a bug folder, analyze.</li>
+    </ol>
+  </div>
+
+  <h2>If something goes wrong</h2>
+  <div class="step">
+    <table>
+      <tr><th>Problem</th><th>Fix</th></tr>
+      <tr><td>".venv won't run" / wrong-PC paths</td>
+          <td>Re-run setup with <code>-Recreate</code></td></tr>
+      <tr><td>pip install fails on a company network</td>
+          <td>Add <code>-Proxy http://&lt;your-proxy&gt;:8080</code></td></tr>
+      <tr><td>"No Python found"</td>
+          <td>Install Python 3.13 from python.org, re-run setup</td></tr>
+      <tr><td>Says "keyword-only" mode</td>
+          <td>Still works. For semantic search run
+              <code>py -3.13 scripts\smart_rag_fetch_model.py</code> (needs internet once)</td></tr>
+      <tr><td>Firmware files (.elf/.img) skipped</td>
+          <td>Run CodeGraph on the build first, then re-create the .db</td></tr>
+    </table>
+  </div>
+
+</div>
+
+<footer>
+  RTC Analyzer · Smart RAG &nbsp;|&nbsp; Open this file in any browser — no internet needed.
+</footer>
+
+<script>
+  // copy-to-clipboard for every command box
+  document.querySelectorAll('.copy').forEach(function(btn){
+    btn.addEventListener('click',function(){
+      var code=btn.parentElement.querySelector('code').innerText;
+      navigator.clipboard.writeText(code).then(function(){
+        var t=btn.innerText; btn.innerText='Copied!';
+        setTimeout(function(){btn.innerText=t;},1200);
+      });
+    });
+  });
+</script>
+</body>
+</html>
