@@ -99,6 +99,18 @@ def main():
     check("callgraph: builtin 'print' filtered as noise",
           not any(x.value == "print" for x in edges))
 
+    # ── tree-sitter call graph (C) — only if tree-sitter installed (optional) ──
+    from smart_rag.adapters.callgraph import _ts_parser
+    if _ts_parser("c") is not None:
+        f = _w(tmp, "m.c", "int helper(int x){return x;}\n"
+               "int main(){return helper(5);}")
+        edges = [(x.entity, x.value) for x in adapter_for(f).extract(f)
+                 if x.attribute == "calls"]
+        check("callgraph(C, tree-sitter): main calls helper",
+              ("main", "helper") in edges)
+    else:
+        check("callgraph(C): tree-sitter absent → graceful (skipped)", True)
+
     # ── empty / garbage honesty ──────────────────────────────────────────────
     f = _w(tmp, "blank.ini", "\n; nothing\n")
     check("empty ini → 0 facts", len(list(adapter_for(f).extract(f))) == 0)

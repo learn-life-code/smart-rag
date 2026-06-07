@@ -92,6 +92,50 @@ _TS_LANG = {".c": "c", ".h": "c", ".cpp": "cpp", ".cc": "cpp", ".hpp": "cpp",
             ".go": "go", ".rs": "rust", ".rb": "ruby"}
 
 
+# tree-sitter bindings vary: some expose node.type/.child_count as PROPERTIES,
+# others (e.g. language-pack 1.8) as METHODS, and parse() may want str or bytes.
+# These helpers normalize both so the backend is version-robust.
+def _attr(obj, name):
+    v = getattr(obj, name, None)
+    return v() if callable(v) else v
+
+
+def _ts_parse(parser, text: str):
+    for arg in (text, text.encode("utf-8", "replace")):
+        try:
+            tree = parser.parse(arg)
+            root = _attr(tree, "root_node")
+            if root is not None and _attr(root, "kind") or _attr(root, "type"):
+                return root
+        except TypeError:
+            continue
+        except Exception:
+            return None
+    return None
+
+
+def _kind(node):
+    return _attr(node, "type") or _attr(node, "kind") or ""
+
+
+def _children(node):
+    n = _attr(node, "child_count") or 0
+    out = []
+    for i in range(n):
+        c = node.child(i) if callable(getattr(node, "child", None)) else None
+        if c is not None:
+            out.append(c)
+    return out or list(_attr(node, "children") or [])
+
+
+def _text(node, src: str):
+    sb, eb = _attr(node, "start_byte"), _attr(node, "end_byte")
+    if isinstance(sb, int) and isinstance(eb, int):
+        return src.encode("utf-8", "replace")[sb:eb].decode("utf-8", "replace")
+    t = _attr(node, "text")
+    return t.decode("utf-8", "replace") if isinstance(t, (bytes, bytearray)) else (t or "")
+
+
 def _treesitter_edges(text: str, src: str, ext: str) -> Iterable[Fact]:
     lang_name = _TS_LANG.get(ext)
     if not lang_name:
@@ -99,13 +143,10 @@ def _treesitter_edges(text: str, src: str, ext: str) -> Iterable[Fact]:
     parser = _ts_parser(lang_name)
     if parser is None:
         return   # tree-sitter not installed → no call edges (graceful)
-    try:
-        tree = parser.parse(text.encode("utf-8", "replace"))
-    except Exception:
+    root = _ts_parse(parser, text)
+    if root is None:
         return
-    # Walk the AST: function_definition nodes → their identifier; call_expression
-    # nodes inside → callee. Tree-sitter node type names are reasonably consistent.
-    yield from _ts_walk(tree.root_node, text, src)
+    yield from _ts_walk(root, text, src)
 
 
 def _ts_parser(lang_name: str):
@@ -126,36 +167,47 @@ def _ts_parser(lang_name: str):
 
 
 _FUNC_NODES = {"function_definition", "function_declaration", "method_definition",
-               "method_declaration", "function_item", "constructor_declaration"}
+               "method_declaration", "function_item", "constructor_declaration",
+               "function_declarator"}
+_CALL_NODES = {"call_expression", "method_invocation", "call", "function_call"}
 
 
 def _ts_walk(node, text: str, src: str, _fn=None) -> Iterable[Fact]:
-    t = node.type
+    t = _kind(node)
     if t in _FUNC_NODES:
-        name = _ts_child_name(node, text)
+        name = _ts_func_name(node, text)
         if name:
             _fn = name
-    if t in ("call_expression", "method_invocation", "call") and _fn:
+    if t in _CALL_NODES and _fn:
         callee = _ts_callee(node, text)
-        if callee and callee not in _NOISE:
+        if callee and callee not in _NOISE and callee.isidentifier():
             yield Fact(entity=_fn, attribute="calls", value=callee, source=src,
                        kind="relation", confidence=0.6)
-    for child in node.children:
+    for child in _children(node):
         yield from _ts_walk(child, text, src, _fn)
 
 
-def _ts_child_name(node, text: str) -> str:
-    for c in node.children:
-        if c.type in ("identifier", "field_identifier", "name"):
-            return text[c.start_byte:c.end_byte]
+def _ts_func_name(node, text: str) -> str:
+    """The defined function's name — its declarator/identifier child (recursive,
+    since C wraps it in function_declarator)."""
+    for c in _children(node):
+        ck = _kind(c)
+        if ck in ("identifier", "field_identifier", "name"):
+            return _text(c, text)
+        if ck in ("function_declarator", "declarator"):
+            inner = _ts_func_name(c, text)
+            if inner:
+                return inner
     return ""
 
 
 def _ts_callee(node, text: str) -> str:
-    # the function being called is usually the first identifier-ish child
-    for c in node.children:
-        if c.type in ("identifier", "field_identifier"):
-            return text[c.start_byte:c.end_byte]
-        if c.type in ("attribute", "field_expression", "selector_expression"):
-            return _ts_child_name(c, text) or text[c.start_byte:c.end_byte].split(".")[-1]
+    """The called function's name — first identifier under the call node."""
+    for c in _children(node):
+        ck = _kind(c)
+        if ck in ("identifier", "field_identifier"):
+            return _text(c, text)
+        if ck in ("attribute", "field_expression", "selector_expression",
+                  "scoped_identifier"):
+            return _text(c, text).split(".")[-1].split("::")[-1]
     return ""
