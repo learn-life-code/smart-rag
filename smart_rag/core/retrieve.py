@@ -143,19 +143,31 @@ def _keyword(plan, store, top_k: int) -> List[Candidate]:
     if not terms:
         return []
     out: List[Candidate] = []
-    # prose term overlap
-    for ch in store.prose[:5000]:
+    prose = store.prose[:5000]
+    # RARITY (IDF-like): a term appearing in FEW chunks is strong evidence; a term
+    # in MANY chunks is weak. This lets a distinctive exact match (e.g. "abstention"
+    # in 9/302 chunks) clear the abstention floor, while a common word ("work")
+    # cannot — fixing agent recall on rare technical terms without false positives.
+    import math
+    N = max(len(prose), 1)
+    df = {w: sum(1 for ch in prose if w in ch.get("text", "").lower()) or 1
+          for w in terms}
+    idf = {w: math.log(1 + N / df[w]) for w in terms}
+    max_idf = max(idf.values()) if idf else 1.0
+    # prose term overlap, weighted by term rarity
+    for ch in prose:
         t = ch.get("text", "").lower()
-        score = sum(1 for w in terms if w in t)
-        if score:
-            # keyword overlap is WEAK evidence: abs_relevance scales with the
-            # FRACTION of query terms matched, capped low so it can't alone clear
-            # the abstention bar (prevents "price"→"Cost" false ANSWERED).
-            frac = score / max(len(terms), 1)
+        matched = [w for w in terms if w in t]
+        if matched:
+            # weight by the rarest matched term's IDF (normalized 0..1) + coverage
+            rarity = max(idf[w] for w in matched) / max_idf
+            frac = len(matched) / len(terms)
+            # a rare exact match can reach ~0.5; common-word matches stay low
+            rel = min(0.6, 0.18 + 0.42 * rarity * (0.5 + 0.5 * frac))
             out.append(Candidate(text=ch["text"][:500],
                                   source=ch.get("title") or ch.get("source", ""),
-                                  score=float(score), channel="keyword", kind="prose",
-                                  abs_relevance=min(0.35, 0.18 * score) * frac))
+                                  score=float(len(matched) * (1 + rarity)),
+                                  channel="keyword", kind="prose", abs_relevance=rel))
     out.sort(key=lambda c: -c.score)
     out = out[:top_k]
     # fact term overlap (entities/attrs/values)

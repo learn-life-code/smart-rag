@@ -46,7 +46,34 @@ def main():
     p.add_argument("--store"); p.add_argument("--db"); p.add_argument("path", nargs="?")
     p.add_argument("--limit", type=int, default=30)
     p = sub.add_parser("profile"); p.add_argument("path"); p.add_argument("--db")
+
+    # ── named persistent indexes (the agent workflow: build once, query fast) ──
+    p = sub.add_parser("index", help="build/refresh a named index over a folder")
+    p.add_argument("name"); p.add_argument("path")
+    p.add_argument("--max-mb", type=float, default=25)
+    p = sub.add_parser("query", help="query a named index (cited, abstains)")
+    p.add_argument("name"); p.add_argument("question")
+    p = sub.add_parser("indexes", help="list named indexes")
+    p = sub.add_parser("drop", help="remove a named index"); p.add_argument("name")
     args = ap.parse_args()
+
+    if args.cmd in ("index", "query", "indexes", "drop"):
+        from smart_rag.collectors import IndexManager
+        mgr = IndexManager()
+        if args.cmd == "index":
+            mgr.build(args.name, args.path, max_file_mb=args.max_mb)
+        elif args.cmd == "query":
+            print(mgr.answer(args.name, args.question).to_text())
+        elif args.cmd == "indexes":
+            cat = mgr.list()
+            if not cat:
+                print("No indexes. Build one: smart_rag index <name> <path>")
+            for n, m in cat.items():
+                print(f"  {n}: {m.get('entities')} entities, {m.get('facts')} facts "
+                      f"← {m.get('source')}")
+        elif args.cmd == "drop":
+            print("removed" if mgr.remove(args.name) else "no such index")
+        return
 
     if args.cmd == "ingest":
         d = SmartRAG(getattr(args, "db", None) or None)

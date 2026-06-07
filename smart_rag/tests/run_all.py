@@ -23,6 +23,7 @@ def main():
     ok &= run(["smart_rag.tests.test_adapters"], "per-adapter unit/golden")
     ok &= run(["smart_rag.tests.test_lifecycle"], "source lifecycle")
     ok &= run(["smart_rag.tests.test_adversarial"], "adversarial (review-found cases)")
+    ok &= run(["smart_rag.tests.test_collectors"], "collectors (fs/index/ssh-guard)")
     if full:
         matrix = ROOT / "software" / "VCU_Variant_Matrix.xlsm"
         if matrix.exists():

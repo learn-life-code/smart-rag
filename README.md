@@ -144,6 +144,43 @@ The adversarial suite covers the cases that break naive RAG: duplicate filenames
 restart-then-update/delete, unknown-id-with-prose, schema migration, JSONL
 round-trip, single-file vectors, AUTOSAR ref-ownership.
 
+## Use it as your AI agent's search layer
+
+An AI coding agent burns most of its tokens running `grep` + `read` across a
+workspace. Index the workspace **once** with Smart RAG, and the agent asks one
+question to get cited facts in ~50 tokens — instead of reading dozens of files.
+
+```bash
+# index a workspace once (incremental; re-running after edits is cheap)
+python -m smart_rag.cli index myrepo /path/to/repo
+
+# query it like an agent would — cited, abstains if not found
+python -m smart_rag.cli query myrepo "how does auth validate the token"
+python -m smart_rag.cli indexes        # list what's indexed
+```
+
+**MCP server** (the agent front door) — register it and your agent calls
+`smartrag_answer` instead of grep/read:
+
+```jsonc
+// e.g. Claude Code .mcp.json
+{ "mcpServers": {
+    "smartrag": { "command": "python", "args": ["-m", "smart_rag.mcp_server"] } } }
+```
+
+Tools: `smartrag_index(name, path)`, `smartrag_answer(name, query)`,
+`smartrag_search(name, entity, attribute)`, `smartrag_list()`.
+
+**Collectors** build the index over different sources:
+- **Folder / drive / whole PC** — `smart_rag.collectors.collect_fs` (skips
+  `.git`/`node_modules`/binaries/caches automatically).
+- **Live machine over SSH** (server, embedded module) — `collect_ssh` runs a
+  **read-only** discovery set (os/services/processes/logs/versions) and indexes the
+  output. Destructive commands are refused by a write-guard — inspection, not control.
+
+Indexes are named + persistent (`~/.smartrag/`), so building is one-time and
+re-opening is instant.
+
 ## Formats & standards
 
 Smart RAG reads common formats **and** real engineering interchange standards —
