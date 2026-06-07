@@ -300,13 +300,20 @@ class SmartRAG:
         = reverse walk; 'what does X call' = forward. Returns None to fall through."""
         from smart_rag.core.answer import AnswerResult, Evidence
         from smart_rag.core import relation as _rel
-        # the target entity = a topic term that is a known entity (longest match)
         ents = set(self.store.entities)
-        target = next((t for t in sorted(plan.topic_terms, key=len, reverse=True)
+        # EXCLUDE the relation verb words from target candidates — 'call/calls/
+        # import/contain/depend' describe the EDGE, not the entity. (On real code a
+        # function may literally be named 'call', which wrongly won out before.)
+        _verbs = {"call", "calls", "called", "import", "imports", "imported",
+                  "contain", "contains", "depend", "depends", "reference",
+                  "references", "use", "uses", "in", "on"}
+        cands = [t for t in plan.topic_terms if t.lower() not in _verbs]
+        # prefer an EXACT entity match over the longest term, so 'ACLHashPassword'
+        # (exact symbol) beats a longer non-entity word.
+        target = next((t for t in sorted(cands, key=len, reverse=True)
                        if t in ents), None)
         if target is None:
-            # try case-insensitive / substring against entity names
-            for t in sorted(plan.topic_terms, key=len, reverse=True):
+            for t in sorted(cands, key=len, reverse=True):
                 hit = next((e for e in ents if t.lower() == e.lower()
                             or t.lower() in e.lower()), None)
                 if hit:

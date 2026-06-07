@@ -148,6 +148,19 @@ def main():
           bool(hit) and "p.xlsx" in hit[0])
     check("sharepoint chunks: irrelevant query abstains (no junk)", miss == [])
 
+    # ── 11. relation query: a verb-named entity must not hijack the target ────
+    # (found on real redis code: a function literally named 'call' won over the
+    #  real target in "what does ACLHashPassword call")
+    d6 = SmartRAG()
+    d6.store.add(Fact(entity="ACLHashPassword", attribute="calls",
+                      value="sha256_init", kind="relation"))
+    d6.store.add(Fact(entity="call", attribute="calls", value="decoy_fn",
+                      kind="relation"))   # decoy named like the verb
+    r = d6.answer("what does ACLHashPassword call")
+    check("relation: verb-named entity ('call') does not hijack the real target",
+          r.status == "ANSWERED" and "sha256_init" in r.to_text()
+          and "decoy_fn" not in r.to_text())
+
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n=== adversarial: {_PASS}/{_PASS+_FAIL} passed ===")
     sys.exit(0 if _FAIL == 0 else 1)
