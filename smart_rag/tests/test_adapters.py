@@ -111,6 +111,21 @@ def main():
     else:
         check("callgraph(C): tree-sitter absent → graceful (skipped)", True)
 
+    # ── binary adapter: ELF magic detection + stripped marker + strings ──────
+    from smart_rag.adapters.binary import BinaryAdapter
+    elf = os.path.join(tmp, "fake.elf")
+    # minimal ELF header (stripped — no symbols) + a readable string
+    open(elf, "wb").write(b"\x7fELF\x02\x01\x01\x00" + b"\x00" * 56 +
+                          b"libcrypto error: bad signature" + b"\x00" * 20)
+    ba = BinaryAdapter()
+    check("binary: detects ELF by magic", ba.can_handle(elf))
+    facts = list(ba.extract(elf))
+    check("binary: stripped ELF flagged (binary_stripped marker)",
+          any(x.attribute == "binary_stripped" for x in facts))
+    prose = list(ba.prose_chunks(elf))
+    check("binary: strings extracted from binary",
+          any("libcrypto" in c["text"] for c in prose))
+
     # ── empty / garbage honesty ──────────────────────────────────────────────
     f = _w(tmp, "blank.ini", "\n; nothing\n")
     check("empty ini → 0 facts", len(list(adapter_for(f).extract(f))) == 0)

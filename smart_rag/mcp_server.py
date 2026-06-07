@@ -40,9 +40,12 @@ _MGR = IndexManager()
 # ── tool implementations (shared by MCP + fallback) ──────────────────────────
 def _index(name: str, path: str) -> str:
     info = _MGR.build(name, path, verbose=False)
-    return (f"Indexed '{name}': {info.get('ingested')} files, "
-            f"{info.get('entities')} entities, {info.get('facts')} facts "
-            f"in {info.get('build_secs')}s. Query with smartrag_answer('{name}', ...).")
+    msg = (f"Indexed '{name}': {info.get('ingested')} files, "
+           f"{info.get('entities')} entities, {info.get('facts')} facts "
+           f"in {info.get('build_secs')}s. Query with smartrag_answer('{name}', ...).")
+    if info.get("codegraph_advice"):
+        msg += f"\n\n{info['codegraph_advice']}"
+    return msg
 
 
 def _answer(name: str, query: str) -> str:

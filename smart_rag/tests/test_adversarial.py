@@ -161,6 +161,20 @@ def main():
           r.status == "ANSWERED" and "sha256_init" in r.to_text()
           and "decoy_fn" not in r.to_text())
 
+    # ── 12. transitive + impact (multi-hop graph traversal) ──────────────────
+    d7 = SmartRAG()
+    for a, b in [("main", "validate"), ("validate", "hash"), ("hash", "sha256"),
+                 ("auth", "validate")]:
+        d7.store.add(Fact(entity=a, attribute="calls", value=b, kind="relation"))
+        d7.store.add(Fact(entity=a, attribute="defined_in", value="x.py:1"))
+    d7.store.add(Fact(entity="sha256", attribute="defined_in", value="x.py:9"))
+    tr = d7.answer("what does main transitively call")
+    check("transitive: main reaches the full chain (hash, sha256 via depth>1)",
+          tr.status == "ANSWERED" and "hash" in tr.to_text() and "sha256" in tr.to_text())
+    imp = d7.answer("what is affected if validate changes")
+    check("impact radius: validate change affects its callers (main, auth)",
+          imp.status == "ANSWERED" and "main" in imp.to_text() and "auth" in imp.to_text())
+
     shutil.rmtree(tmp, ignore_errors=True)
     print(f"\n=== adversarial: {_PASS}/{_PASS+_FAIL} passed ===")
     sys.exit(0 if _FAIL == 0 else 1)

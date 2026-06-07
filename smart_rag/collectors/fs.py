@@ -17,11 +17,12 @@ _SKIP_DIRS = {
 }
 
 # Extensions worth indexing by default (text/structured/standard formats).
-# Binaries/media are skipped unless explicitly allowed (the adapters also guard).
+# Media/archives skipped. NOTE: .so/.elf/.o are NOT skipped — the binary adapter
+# extracts ELF symbols + strings from them now (built-in, no external codegraph).
 _SKIP_EXT = {
     ".png", ".jpg", ".jpeg", ".gif", ".bmp", ".ico", ".svg", ".webp",
     ".mp3", ".mp4", ".avi", ".mov", ".wav", ".zip", ".gz", ".7z", ".rar",
-    ".tar", ".exe", ".dll", ".so", ".dylib", ".o", ".a", ".lib", ".bin",
+    ".tar", ".exe", ".dll", ".dylib", ".a", ".lib",
     ".pyc", ".pyo", ".class", ".jar", ".woff", ".woff2", ".ttf", ".eot",
 }
 

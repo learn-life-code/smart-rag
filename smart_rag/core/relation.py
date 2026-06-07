@@ -97,3 +97,37 @@ def walk_relations(store, entity: str, attribute: str = "",
             if len(out) >= limit:
                 break
     return out
+
+
+def walk_transitive(store, entity: str, attribute: str = "calls", *,
+                    reverse: bool = False, max_depth: int = 5,
+                    max_nodes: int = 200) -> List[dict]:
+    """Multi-hop closure over the edge graph (BFS, cycle-safe, depth-bounded).
+
+    forward (reverse=False): everything `entity` transitively reaches
+        — 'what does X call (directly and indirectly)' / dependency chain.
+    reverse=True: everything that transitively reaches `entity`
+        — IMPACT RADIUS: 'what is affected if X changes' (all upstream callers).
+
+    Returns [{from, rel, to, depth}] edges in BFS order. This is the graph-traversal
+    capability codegraph-main planned (callers/callees/impact radius) — done over
+    the same relation facts, so it works on ANY relation kind (calls, depends_on,
+    in_pdu→frame→bus, etc.), not just code.
+    """
+    seen_nodes = {entity}
+    out: List[dict] = []
+    frontier = [(entity, 0)]
+    while frontier and len(out) < max_nodes:
+        node, depth = frontier.pop(0)
+        if depth >= max_depth:
+            continue
+        for e in walk_relations(store, node, attribute, reverse=reverse, limit=50):
+            nxt = e["from"] if reverse else e["to"]
+            out.append({"from": e["from"], "rel": e["rel"], "to": e["to"],
+                        "depth": depth + 1, "source": e.get("source", "")})
+            if nxt not in seen_nodes:
+                seen_nodes.add(nxt)
+                frontier.append((nxt, depth + 1))
+            if len(out) >= max_nodes:
+                break
+    return out

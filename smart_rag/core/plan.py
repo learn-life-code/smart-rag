@@ -47,10 +47,12 @@ _REVERSE = re.compile(
     r'variants?|components?|files?)\b.*\b(use[sd]?|have|has|with|containing)\b', re.I)
 
 # Relation/structural: "what calls X", "what does X call/import/depend on",
-# "what is X in" — entity→entity edge questions (codegraph + AUTOSAR).
+# "what is X in", "impact radius of X", "what's affected if X changes" —
+# entity→entity edge questions incl. multi-hop traversal (codegraph + AUTOSAR).
 _RELATION = re.compile(r'\b(call[s]?|called by|import[s]?|depend[s]?|contain[s]?|'
                        r'reference[s]?|instantiat|inherit|implement|in (message|pdu|'
-                       r'frame|bus)|on bus)\b', re.I)
+                       r'frame|bus)|on bus|impact|affect(ed|s)?|blast radius|'
+                       r'ripple|transitive|recursiv|dependency chain)\b', re.I)
 
 _STOP = frozenset((
     "the", "is", "are", "was", "were", "of", "for", "and", "or", "in", "on", "to",

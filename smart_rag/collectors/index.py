@@ -65,6 +65,16 @@ class IndexManager:
         db = self._db_path(name)
         sr = SmartRAG(db)
         files = list(collect_fs(source, max_file_mb=max_file_mb))
+        # scan the RAW tree (incl. files the collector skips) for binaries/firmware
+        # that need codegraph — so we can advise the user.
+        from smart_rag.collectors.binary_hint import scan_for_binaries
+        import os as _os
+        all_paths = []
+        for r, _, fs in _os.walk(source):
+            if any(s in r for s in (".git", "node_modules", ".venv")):
+                continue
+            all_paths.extend(_os.path.join(r, f) for f in fs)
+        bin_scan = scan_for_binaries(all_paths)
         if verbose:
             print(f"[smartrag] indexing '{name}': {len(files)} files from {source}")
         t0 = time.time()
@@ -87,10 +97,23 @@ class IndexManager:
                      "entities": stats.get("entities"),
                      "facts": stats.get("distinct_facts"),
                      "updated": time.time(), "build_secs": round(time.time() - t0, 1)}
+        # also detect STRIPPED ELFs (parsed but no symbols → need codegraph)
+        stripped = [f.source for f in sr.search(attribute="binary_stripped", limit=20)]
+        advice = bin_scan.get("advice", "")
+        if stripped:
+            uniq = sorted(set(stripped))[:6]
+            advice = (advice + "\n" if advice else "") + (
+                f"⚠ {len(set(stripped))} ELF file(s) are STRIPPED (no symbol table): "
+                f"{', '.join(uniq)}. Run codegraph/binary_symbol_extractor on these "
+                f"for symbols+call-graph, then re-run Smart RAG.")
+        if advice:
+            cat[name]["codegraph_advice"] = advice
         self._save_catalog(cat)
         if verbose:
             print(f"[smartrag] '{name}' ready: {used} ingested, {empty} empty, "
                   f"{errs} errored in {cat[name]['build_secs']}s")
+            if bin_scan.get("advice"):
+                print(f"[smartrag] {bin_scan['advice']}")
         return cat[name]
 
     def build_ssh(self, name: str, target: str, *, key: Optional[str] = None,

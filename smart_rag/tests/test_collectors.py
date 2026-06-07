@@ -57,10 +57,14 @@ def main():
     home = os.path.join(tmp, "home")
     os.makedirs(os.path.join(tmp, "proj"))
     open(os.path.join(tmp, "proj", "notes.md"), "w").write(
-        "# Auth\nThe login service validates the token before granting access.")
+        "# Authentication\n\nThe login service validates the session token before "
+        "granting access. Token validation checks the signature, expiry, and the "
+        "user's permissions against the access control list.\n\n"
+        "## Token validation steps\n1. Parse the bearer token.\n2. Verify the "
+        "signature.\n3. Check expiry.\n4. Look up permissions.\n")
     mgr = IndexManager(home=home)
     mgr.build("proj", os.path.join(tmp, "proj"), verbose=False)
-    r = mgr.answer("proj", "how does login validate")
+    r = mgr.answer("proj", "how does token validation work")
     check("index: build+query answers from indexed folder",
           r.status in ("ANSWERED", "PARTIAL"))
     check("index: catalog lists the index", "proj" in mgr.list())

@@ -329,11 +329,40 @@ class SmartRAG:
                     target = hit; break
         if target is None:
             return None
+        import re as _re
         rel_attr = _rel.relation_attr_for(query)
-        reverse = bool(__import__("re").search(r'\b(what|which|who)\b.*\bcall', query, __import__("re").I)) \
+        forward = bool(_re.search(r'\bdoes\b.*\b(call|import|depend|contain)', query, _re.I))
+
+        # ── TRANSITIVE / IMPACT queries (multi-hop graph traversal) ──────────
+        # 'what does X transitively/indirectly call', 'X dependency chain',
+        # 'impact radius of X', 'what is affected if X changes' → BFS closure.
+        _transitive = bool(_re.search(
+            r'\b(transitive|transitively|indirect|indirectly|recursiv|chain|'
+            r'reach|all the way|deeply)\b', query, _re.I))
+        _impact = bool(_re.search(
+            r'\b(impact|affect|affected|blast radius|ripple|break if|breaks if|'
+            r'changes?|modif)\b', query, _re.I))
+        if _transitive or _impact:
+            # impact = who reaches X (reverse closure); transitive-call = what X reaches
+            rev = _impact and not forward
+            edges = _rel.walk_transitive(self.store, target,
+                                         rel_attr or "calls", reverse=rev,
+                                         max_depth=6, max_nodes=80)
+            if edges:
+                nodes = {(e["from"] if rev else e["to"]) for e in edges}
+                kind = ("impacted by a change to" if rev else "transitively reaches")
+                ev = [Evidence(text=f"{e['from']} {e['rel']} {e['to']} (depth {e['depth']})",
+                               source=e.get("source", "")) for e in edges[:8]]
+                lines = [f"  {e['from']} -{e['rel']}-> {e['to']}  [depth {e['depth']}]"
+                         for e in edges[:25]]
+                body = (f"{target} — {kind} {len(nodes)} node(s) across "
+                        f"{max(e['depth'] for e in edges)} hop(s):\n" + "\n".join(lines))
+                return AnswerResult(status="ANSWERED", query=query, confidence="HIGH",
+                                    evidence=ev, answer=body)
+
+        reverse = bool(_re.search(r'\b(what|which|who)\b.*\bcall', query, _re.I)) \
             and "called by" not in query.lower()
         # "what calls X" → reverse (who points at X); "what does X call" → forward
-        forward = bool(__import__("re").search(r'\bdoes\b.*\b(call|import|depend|contain)', query, __import__("re").I))
         all_edges = _rel.walk_relations(self.store, target, rel_attr,
                                         reverse=not forward, limit=60)
         if not all_edges:
