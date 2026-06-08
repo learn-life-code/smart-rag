@@ -50,6 +50,7 @@ all = [
 
 [project.scripts]
 smart-rag = "smart_rag.cli:main"
+smart-rag-gui = "smart_rag.gui:main"
 
 [tool.setuptools.packages.find]
 include = ["smart_rag*"]

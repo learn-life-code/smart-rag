@@ -43,8 +43,8 @@ py -3.13 -m smart_rag.cli search  --entity <id> --attr <attr>    yourfile.xlsx
 py -3.13 -m smart_rag.cli profile yourfile.xlsx        # what shape is my data?
 py -3.13 -m smart_rag.bench       yourfile.xlsx        # show me the numbers
 
-# GUI (drag-a-file, no coding)
-py -3.13 distill/gui.py
+# GUI (persistent SQLite database, responsive background operations)
+py -3.13 -m smart_rag.gui
 ```
 
 ```python
@@ -55,6 +55,25 @@ d.ingest("yourfolder")                       # file or folder, mixed formats
 print(d.ask("UFS and RAM for SKU1001"))   # grounded + sources
 d.search(entity="SKU1001", attribute="ufs")   # programmatic, no LLM
 ```
+
+## Consumer integration
+
+Use the AI-free plug-in when another analyzer owns the final reasoning:
+
+```python
+from smart_rag.plugin import DistillRetriever
+
+r = DistillRetriever(db_path="baseline_distill.db")
+evidence = r.expectation_evidence(
+    title="HUD calibration missing after wake",
+    description="Expected calibration data to reach the HUD.",
+    observed_hint="VPE_K_VEHICLE_FRONT_VIEW_PRESENT service_vpe",
+)
+```
+
+`expectation_evidence()` separates intended behavior, configuration/support,
+execution flow/preconditions, and ownership/boundary evidence. It requires
+source citations and rejects broad results that do not match ticket anchors.
 
 ## Format support (honest — ✅ = proven & tested)
 

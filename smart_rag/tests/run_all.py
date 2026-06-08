@@ -24,12 +24,13 @@ def main():
     ok &= run(["smart_rag.tests.test_lifecycle"], "source lifecycle")
     ok &= run(["smart_rag.tests.test_adversarial"], "adversarial (review-found cases)")
     ok &= run(["smart_rag.tests.test_collectors"], "collectors (fs/index/ssh-guard)")
+    ok &= run(["smart_rag.tests.test_plugin"], "consumer evidence plug-in")
     if full:
         matrix = ROOT / "software" / "VCU_Variant_Matrix.xlsm"
         if matrix.exists():
             ok &= run(["scripts.eval", "--matrix", str(matrix)], "adoption gate (matrix)")
     print("\n==================================")
-    print("ALL SUITES: " + ("PASS ✅" if ok else "FAIL ❌ (regression)"))
+    print("ALL SUITES: " + ("PASS" if ok else "FAIL (regression)"))
     sys.exit(0 if ok else 1)
 
 
