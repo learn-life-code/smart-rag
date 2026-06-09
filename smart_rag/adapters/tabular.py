@@ -87,9 +87,25 @@ class TabularAdapter(Adapter):
     # ── Excel (structure-preserving) ─────────────────────────────────────────
     def _extract_excel(self, path: str) -> Iterable[Fact]:
         import openpyxl
+        import warnings
         src_name = os.path.basename(path)
         ver = _version_from_name(src_name)
-        wb = openpyxl.load_workbook(path, data_only=True, keep_vba=False)
+        # openpyxl drops unsupported formatting/validation extensions while
+        # preserving the worksheet values that this adapter extracts.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message="Conditional Formatting extension is not supported.*",
+                category=UserWarning,
+                module=r"openpyxl\.worksheet\._reader",
+            )
+            warnings.filterwarnings(
+                "ignore",
+                message="Data Validation extension is not supported.*",
+                category=UserWarning,
+                module=r"openpyxl\.worksheet\._reader",
+            )
+            wb = openpyxl.load_workbook(path, data_only=True, keep_vba=False)
         for sheet in wb.sheetnames:
             ws = wb[sheet]
             if ws.max_row < 2 or ws.max_column < 2:

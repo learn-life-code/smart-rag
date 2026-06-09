@@ -102,7 +102,10 @@ class DocsAdapter(Adapter):
             yield {"text": "\n".join(buf), "source": src, "title": title}
 
     def _chunk_pdf(self, path: str, src: str) -> Iterable[dict]:
-        import pymupdf
+        try:
+            import pymupdf
+        except ModuleNotFoundError:
+            import fitz as pymupdf
         doc = pymupdf.open(path)
         for i, page in enumerate(doc):
             t = page.get_text().strip()

@@ -17,6 +17,7 @@ Backends (best available, graceful):
 from __future__ import annotations
 
 import ast
+import warnings
 from typing import Iterable
 
 from smart_rag.core.fact import Fact
@@ -45,7 +46,15 @@ def call_edges(text: str, src: str, ext: str) -> Iterable[Fact]:
 # ── Python: stdlib ast (exact) ───────────────────────────────────────────────
 def _python_edges(text: str, src: str) -> Iterable[Fact]:
     try:
-        tree = ast.parse(text)
+        # Invalid escapes in indexed source are non-fatal on Python 3.12+.
+        # They belong to the inspected file and should not pollute the GUI log.
+        with warnings.catch_warnings():
+            warnings.filterwarnings(
+                "ignore",
+                message=r"invalid escape sequence.*",
+                category=SyntaxWarning,
+            )
+            tree = ast.parse(text, filename=src)
     except Exception:
         return
     defined = {n.name for n in ast.walk(tree)
