@@ -22,6 +22,23 @@ from typing import List, Optional
 from smart_rag.api import SmartRAG
 
 
+def _annotate_config_line(line: str, assessments: dict) -> str:
+    """If an evidence line names an assessed config key, append its value + status so
+    the LLM reads MEANING (value, normal/anomalous) instead of bare 'present'."""
+    for key, a in assessments.items():
+        if key in line:
+            val = getattr(a, "value", None)
+            status = getattr(a, "status", "")
+            label = {"normal-default": "NORMAL — value matches default",
+                     "anomalous": "ANOMALOUS — differs from default",
+                     "missing-calibration": "MISSING — module calibration not applied",
+                     "unknown": "value unverified"}.get(status, status)
+            shown = f" = {val}" if val is not None else " = (no value in logs)"
+            prov = getattr(a, "provenance", "")
+            return f"{line.rstrip()}  [{prov}{shown} · {label}]"
+    return line
+
+
 def _baseline_db_path(codegraph_path: str) -> "Path | None":
     """Where the baseline distill.db lives for a given build/codegraph path —
     factored out so the CLI and baseline_store_for agree on the location.
@@ -158,6 +175,7 @@ class DistillRetriever:
         top_k_per_category: int = 4,
         max_chars: int = 9000,
         min_score: float = 0.12,
+        config_assessments: "dict | None" = None,
     ) -> str:
         """Retrieve typed baseline evidence for expected-versus-observed RCA.
 
@@ -366,6 +384,16 @@ class DistillRetriever:
                         break
                 if len(category_lines) >= top_k_per_category or used >= max_chars:
                     break
+            if config_assessments:
+                def _rank(ln):
+                    for k, a in config_assessments.items():
+                        if k in ln:
+                            return {"anomalous": 0, "missing-calibration": 0,
+                                    "unknown": 1, "normal-default": 2}.get(
+                                        getattr(a, "status", ""), 1)
+                    return 1
+                category_lines = [_annotate_config_line(l, config_assessments) for l in category_lines]
+                category_lines.sort(key=_rank)
             if category_lines:
                 lines.append(f"-- {category} --")
                 lines.extend(category_lines)
