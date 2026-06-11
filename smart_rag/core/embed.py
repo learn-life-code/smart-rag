@@ -98,12 +98,28 @@ def _model():
     return _MODEL
 
 
+_WARNED_NO_MODEL = False
+
+
 def embed(texts: List[str]):
-    """Return a normalized numpy matrix [n, dim] (unit vectors → dot = cosine)."""
+    """Return a normalized numpy matrix [n, dim] (unit vectors → dot = cosine).
+
+    When no embedding model is available (offline / no torch / model not
+    cached) this returns ZERO vectors instead of crashing — the vector channel
+    then contributes nothing and retrieval degrades to keyword/FTS, which is
+    the documented fallback contract of _model().
+    """
+    import numpy as np
     if not texts:
-        import numpy as np
         return np.zeros((0, 384), dtype="float32")
     m = _model()
+    if m is None:
+        global _WARNED_NO_MODEL
+        if not _WARNED_NO_MODEL:
+            _WARNED_NO_MODEL = True
+            print("  [embed] no embedding model available (offline/no torch) — "
+                  "vector channel disabled, keyword retrieval only")
+        return np.zeros((len(texts), 384), dtype="float32")
     batch = 256 if getattr(m, "device", None) and str(m.device).startswith("cuda") else 64
     return m.encode(texts, batch_size=batch, normalize_embeddings=True,
                     show_progress_bar=False, convert_to_numpy=True)
